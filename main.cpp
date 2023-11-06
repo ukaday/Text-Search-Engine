@@ -7,6 +7,64 @@
 
 using namespace std;
 
+struct Value {
+    string word;
+    int hashValue = -1;
+    vector<int> postingList;
+};
+
+class HashTable {
+
+    int N = 999883;
+    Value table[999883];
+
+public:
+
+    HashTable() {
+        for (int i = 0; i < N; i++) {
+            table[i] = Value();
+        }
+    }
+
+    int hashFunc(const string &s) const {
+        int hash = 0;
+        for (char i : s)
+            hash = hash + i;
+        return hash % N;
+    }
+
+    int createHash(const string &s) {
+        int index = hashFunc(s);
+        int startIndex = index;
+        Value *v = &table[index];
+
+        while (v->hashValue != -1 && v->word != s) {
+            index = (index + 1) % N;
+            if (index == startIndex) {
+                cerr << "Hash table is full" << endl;
+                return -1;
+            }
+            v = &table[index];
+        }
+
+        v->hashValue = index;
+        v->word = s;
+
+        return index;
+    }
+
+    void put (string &s, int document) {
+
+    }
+
+    void print() {
+        for (const auto& value : table) {
+            cout << value.hashValue << endl;
+        }
+    }
+
+};
+
 set<string> splitString(const string& s, char delimiter) {
     set<string> output;
 
@@ -47,58 +105,54 @@ vector<string> storeDocs(ifstream &input) {
     return docs;
 }
 
-struct Value {
-    string word;
-    int hashValue = -1;
-    vector<int> postingList;
-};
+HashTable* hashDocs(vector<string> &docs) {
+    auto* table = new HashTable();
 
-class HashTable {
-
-    int N = 999883;
-    Value table[999883];
-
-public:
-
-    HashTable() {
-        for (int i = 0; i < N; i++) {
-            table[i] = Value();
+    set<string> vocab;
+    for (int i = 1; i < docs.size(); i++) {
+        auto words = splitString(docs[i], ' ');
+        for (const auto &word : words) {
+            vocab.insert(word);
         }
     }
 
-    int hashFunc(const string &s) {
-        int hash = 0;
-        int N = 999883;
-        for (char i : s)
-            hash = hash + i;
-        return hash % N;
+    for (const auto &word : vocab) {
+        table->createHash(word);
     }
 
-    int createHash(const string &s) {
-        int index = hashFunc(s);
-        Value v = table[index];
-        do {
-            if (v.hashValue == -1 || v.word == s) {
+    return table;
+}
+
+vector<set<int>> createDocMatrix(vector<string> &docs) {
+    auto table = hashDocs(docs);
+    vector<set<int>> output;
+
+    for (int i = 1; i < docs.size(); i++) {
+        auto words = splitString(docs[i], ' ');
+        set<int> postingList;
+        for (const auto &word : words) {
+            postingList.insert(table->createHash(word));
+        }
+        output.push_back(postingList);
+    }
+    return output;
+}
+
+void printDocMatrix(vector<set<int>> docMatrix) {
+    int docIndex = 1;
+    for (const auto& posting : docMatrix) {
+        cout << docIndex << "->" << "[";
+        for (auto it = posting.begin(); it != posting.end(); ++it) {
+            if (it == --posting.end()) {
+                cout << *it;
                 break;
             }
-        } while (index++);
-        v.hashValue = index;
-        v.word = s;
-        return index;
-    }
-
-    void put (string &s, int document) {
-
-    }
-
-    void print() {
-        for (const auto& thing : table) {
-            cout << thing.hashValue << endl;
+            cout << *it << ", ";
         }
+        cout << "]" << endl;
+        docIndex++;
     }
-
-};
-
+}
 
 int main(int argc, char *argv[]) {
 
@@ -110,16 +164,8 @@ int main(int argc, char *argv[]) {
     }
 
     auto docs = storeDocs(documents);
-    auto* table = new HashTable();
-
-    for (int i = 1; i < docs.size(); ++i) {
-        auto words = splitString(docs[i], ' ');
-        for (const auto &word : words) {
-            cout << word << ":";
-            cout << table->createHash(word) << endl;
-        }
-        cout << endl;
-    }
+    auto docMatrix = createDocMatrix(docs);
+    printDocMatrix(docMatrix);
 
     return 0;
 }
