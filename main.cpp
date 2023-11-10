@@ -10,7 +10,7 @@ using namespace std;
 struct Value {
     string word;
     int hashValue = -1;
-    vector<int> postingList;
+    set<int> postingList;
 };
 
 class HashTable {
@@ -40,6 +40,8 @@ public:
 
         while (v->hashValue != -1 && v->word != s) {
             index = (index + 1) % N;
+
+            //checks if index loops around
             if (index == startIndex) {
                 cerr << "Hash table is full" << endl;
                 return -1;
@@ -53,19 +55,29 @@ public:
         return index;
     }
 
-    void put (string &s, int document) {
+    void put(const string &s, int document) {
+        int index = createHash(s);
+        table[index].postingList.insert(document);
+    }
 
+    set<int> get(string &s) {
+        int index = createHash(s);
+        return table[index].postingList;
     }
 
     void print() {
         for (const auto& value : table) {
-            cout << value.hashValue << endl;
+            cout << "{";
+            for (const auto& word : value.postingList) {
+                cout << word << " ";
+            }
+            cout << "} ";
         }
     }
 
 };
 
-set<string> splitString(const string& s, char delimiter) {
+set<string> splitStringToSet(const string& s, char delimiter) {
     set<string> output;
 
     string word;
@@ -89,83 +101,134 @@ set<string> splitString(const string& s, char delimiter) {
     return output;
 }
 
-vector<string> storeDocs(ifstream &input) {
+vector<string> splitStringToVector(const string& s, char delimiter) {
+    vector<string> output;
+
+    string word;
+    for (char c : s) {
+
+        if (c == delimiter) {
+            output.push_back(word);
+            word = "";
+            continue;
+        }
+
+        if (isalnum(c)) {
+            word += tolower(c);
+        }
+
+        if (c == s.back()) {
+            output.push_back(word);
+        }
+    }
+
+    return output;
+}
+
+vector<set<string>> storeDocs(ifstream &input) {
     string doc;
-    vector<string> docs;
+    vector<set<string>> docs;
 
     // indexes starting at 1 instead of 0
     // this is a placeholder
-    docs.emplace_back("");
+    docs.emplace_back();
 
     while (!input.eof()) {
         getline(input, doc);
-        docs.push_back(doc);
+        auto splitDoc = splitStringToSet(doc, ' ');
+        docs.push_back(splitDoc);
     }
 
     return docs;
 }
 
-HashTable* hashDocs(vector<string> &docs) {
+HashTable* hashDocs(vector<set<string>> &docs) {
     auto* table = new HashTable();
 
-    set<string> vocab;
+    //sorts all unique words in all documents before hashing
+    /*set<string> vocab;
     for (int i = 1; i < docs.size(); i++) {
-        auto words = splitString(docs[i], ' ');
-        for (const auto &word : words) {
+        for (const auto &word : docs[i]) {
             vocab.insert(word);
         }
     }
 
     for (const auto &word : vocab) {
         table->createHash(word);
+    } */
+
+    //hashes docs in order
+    for (int i = 1; i < docs.size(); i++) {
+        for (const auto &word : docs[i]) {
+            table->createHash(word);
+        }
     }
 
     return table;
 }
 
-vector<set<int>> createDocMatrix(vector<string> &docs) {
-    auto table = hashDocs(docs);
+vector<set<int>> createDocMatrix(HashTable* table, vector<set<string>> &docs) {
     vector<set<int>> output;
 
     for (int i = 1; i < docs.size(); i++) {
-        auto words = splitString(docs[i], ' ');
-        set<int> postingList;
-        for (const auto &word : words) {
-            postingList.insert(table->createHash(word));
+        set<int> hashedDocument;
+        for (const auto &word : docs[i]) {
+            hashedDocument.insert(table->createHash(word));
+            table->put(word, i);
         }
-        output.push_back(postingList);
+        output.push_back(hashedDocument);
     }
     return output;
 }
 
-void printDocMatrix(vector<set<int>> docMatrix) {
+void writeDocMatrix(ofstream &file, vector<set<int>> docMatrix) {
     int docIndex = 1;
     for (const auto& posting : docMatrix) {
-        cout << docIndex << "->" << "[";
+        file << docIndex << "->" << "[";
         for (auto it = posting.begin(); it != posting.end(); ++it) {
             if (it == --posting.end()) {
-                cout << *it;
+                file << *it;
                 break;
             }
-            cout << *it << ", ";
+            file << *it << ", ";
         }
-        cout << "]" << endl;
+        file << "]" << endl;
         docIndex++;
+    }
+}
+
+void executeInstructions(ifstream &instructions) {
+
+    string instruction;
+    while (!instructions.eof()) {
+        getline(instructions, instruction);
+        auto splitDoc = splitStringToVector(instruction, ' ');
+        cout << instruction << endl;
     }
 }
 
 int main(int argc, char *argv[]) {
 
-    ifstream documents(argv[1]);
+    ifstream documentsFile(argv[1]);
+    ifstream instructionsFile(argv[2]);
+    ofstream documentMatrixFile(argv[3]);
+    ofstream instructionOutFile(argv[4]);
 
-    if (!documents.good()) {
+    if (!documentsFile.good() || !documentMatrixFile.good()
+        || !instructionsFile.good() || !instructionOutFile.good()) {
         cout << "error opening file" << endl;
         return 0;
     }
 
-    auto docs = storeDocs(documents);
-    auto docMatrix = createDocMatrix(docs);
-    printDocMatrix(docMatrix);
+    auto docs = storeDocs(documentsFile);
+    documentsFile.close();
+
+    auto table = hashDocs(docs);
+    auto docMatrix = createDocMatrix(table, docs);
+    writeDocMatrix(documentMatrixFile, docMatrix);
+    documentMatrixFile.close();
+
+    executeInstructions(instructionsFile);
 
     return 0;
 }
