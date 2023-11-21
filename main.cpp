@@ -3,9 +3,12 @@
 #include <vector>
 #include <string>
 #include <set>
+#include <stack>
 
 
 using namespace std;
+
+set<int> UNIVERSAL_POSTING_LIST;
 
 struct Value {
     string word;
@@ -60,7 +63,7 @@ public:
         table[index].postingList.insert(document);
     }
 
-    set<int> get(string &s) {
+    set<int> get(const string &s) {
         int index = createHash(s);
         return table[index].postingList;
     }
@@ -77,6 +80,7 @@ public:
 
 };
 
+//does lowercase
 set<string> splitStringToSet(const string& s, char delimiter) {
     set<string> output;
 
@@ -101,6 +105,7 @@ set<string> splitStringToSet(const string& s, char delimiter) {
     return output;
 }
 
+//does not lowercase
 vector<string> splitStringToVector(const string& s, char delimiter) {
     vector<string> output;
 
@@ -114,7 +119,7 @@ vector<string> splitStringToVector(const string& s, char delimiter) {
         }
 
         if (isalnum(c)) {
-            word += tolower(c);
+            word += c;
         }
 
         if (c == s.back()) {
@@ -146,7 +151,7 @@ HashTable* hashDocs(vector<set<string>> &docs) {
     auto* table = new HashTable();
 
     //sorts all unique words in all documents before hashing
-    /*set<string> vocab;
+    set<string> vocab;
     for (int i = 1; i < docs.size(); i++) {
         for (const auto &word : docs[i]) {
             vocab.insert(word);
@@ -155,14 +160,14 @@ HashTable* hashDocs(vector<set<string>> &docs) {
 
     for (const auto &word : vocab) {
         table->createHash(word);
-    } */
+    }
 
     //hashes docs in order
-    for (int i = 1; i < docs.size(); i++) {
+    /*for (int i = 1; i < docs.size(); i++) {
         for (const auto &word : docs[i]) {
             table->createHash(word);
         }
-    }
+    }*/
 
     return table;
 }
@@ -181,7 +186,7 @@ vector<set<int>> createDocMatrix(HashTable* table, vector<set<string>> &docs) {
     return output;
 }
 
-void writeDocMatrix(ofstream &file, vector<set<int>> docMatrix) {
+void writeDocMatrix(ofstream &file, const vector<set<int>> &docMatrix) {
     int docIndex = 1;
     for (const auto& posting : docMatrix) {
         file << docIndex << "->" << "[";
@@ -197,13 +202,115 @@ void writeDocMatrix(ofstream &file, vector<set<int>> docMatrix) {
     }
 }
 
-void executeInstructions(ifstream &instructions) {
+vector<string> infixToPostfix(vector<string> &infix) {
+    stack<string> stack;
+    vector<string> output;
 
+    for (const auto &op : infix) {
+
+        if (op != "AND" && op != "OR") {
+            stack.push(op);
+            continue;
+        }
+
+        while (!stack.empty()) {
+            output.push_back(stack.top());
+            stack.pop();
+        }
+        stack.push(op);
+    }
+
+    while (!stack.empty()) {
+        output.push_back(stack.top());
+        stack.pop();
+    }
+
+    cout << "\n";
+
+    return output;
+}
+
+set<int> evaluateOperation(const set<int> &postingList1,
+                           const set<int> &postingList2, const string &op) {
+    set<int> output;
+    auto p1 = postingList1.begin();
+    auto p2 = postingList2.begin();
+
+    if (op == "AND") {
+        while (p1 != postingList1.end() && p2 != postingList2.end()) {
+            if (*p1 == *p2) {
+                output.insert(*p1);
+                p1++;
+                p2++;
+                continue;
+            }
+            if (*p1 < *p2) {
+                p1++;
+                continue;
+            }
+            p2++;
+        }
+        return output;
+    }
+
+    // for case where op == "OR"
+    output.insert(postingList1.begin(), postingList1.end());
+    output.insert(postingList2.begin(), postingList2.end());
+
+    return output;
+}
+
+set<int> evaluateNegation(const set<int> &postingList) {
+    set<int> output;
+
+    for (const auto &index : UNIVERSAL_POSTING_LIST) {
+        if (!postingList.contains(index)) {
+            output.insert(index);
+        }
+    }
+
+    return output;
+}
+
+set<int> evaluateInstructions(HashTable &table, const vector<string> &instructions) {
+    stack<set<int>> stack;
+
+    for (const auto &op : instructions) {
+        if (op == "NOT") {
+            auto neg = evaluateNegation(stack.top());
+            stack.pop();
+            stack.push(neg);
+            continue;
+        }
+        if (op != "AND" && op != "OR") {
+            stack.push(table.get(op));
+            continue;
+        }
+
+        auto b = stack.top();
+        stack.pop();
+        auto a = stack.top();
+        stack.pop();
+
+        auto result = evaluateOperation(a, b, op);
+        stack.push(result);
+    }
+    return stack.top();
+}
+
+void executeInstructions(ifstream &instructions, HashTable &table) {
     string instruction;
     while (!instructions.eof()) {
         getline(instructions, instruction);
-        auto splitDoc = splitStringToVector(instruction, ' ');
-        cout << instruction << endl;
+        auto splitInstructions = splitStringToVector(instruction, ' ');
+
+        auto postFixInstructions = infixToPostfix(splitInstructions);
+        auto result = evaluateInstructions(table, postFixInstructions);
+
+        for (const auto &e : result) {
+            cout << e << " ";
+        }
+        cout << "\n";
     }
 }
 
@@ -223,12 +330,16 @@ int main(int argc, char *argv[]) {
     auto docs = storeDocs(documentsFile);
     documentsFile.close();
 
+    for (int i = 1; i <= docs.size(); i++) {
+        UNIVERSAL_POSTING_LIST.insert(i);
+    }
+
     auto table = hashDocs(docs);
     auto docMatrix = createDocMatrix(table, docs);
     writeDocMatrix(documentMatrixFile, docMatrix);
     documentMatrixFile.close();
 
-    executeInstructions(instructionsFile);
+    executeInstructions(instructionsFile, *table);
 
     return 0;
 }
