@@ -1,3 +1,0 @@
-E:/Program Stuff/C_C++/Text-Search-Engine/cmake-build-debug/CMakeFiles/Text_Search_Engine.dir
-E:/Program Stuff/C_C++/Text-Search-Engine/cmake-build-debug/CMakeFiles/edit_cache.dir
-E:/Program Stuff/C_C++/Text-Search-Engine/cmake-build-debug/CMakeFiles/rebuild_cache.dir

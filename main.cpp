@@ -264,7 +264,7 @@ set<int> evaluateNegation(const set<int> &postingList) {
     set<int> output;
 
     for (const auto &index : UNIVERSAL_POSTING_LIST) {
-        if (!postingList.contains(index)) {
+        if (!postingList.count(index)) {
             output.insert(index);
         }
     }
